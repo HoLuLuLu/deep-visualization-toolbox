@@ -182,30 +182,30 @@ class CaffeAdapter(BaseAdapter):
 
             # keep filter, stride and pad
             if layer_def.type == 'Convolution':
-                self.filter = list(layer_def.convolution_param.kernel_size)
+                self.filter = map(int, list(layer_def.convolution_param.kernel_size))
                 if len(self.filter) == 1:
                     self.filter *= 2
-                self.pad = list(layer_def.convolution_param.pad)
+                self.pad = map(int, list(layer_def.convolution_param.pad))
                 if len(self.pad) == 0:
                     self.pad = [0, 0]
                 elif len(self.pad) == 1:
                     self.pad *= 2
-                self.stride = list(layer_def.convolution_param.stride)
+                self.stride = map(int, list(layer_def.convolution_param.stride))
                 if len(self.stride) == 0:
                     self.stride = [1, 1]
                 elif len(self.stride) == 1:
                     self.stride *= 2
 
             elif layer_def.type == 'Pooling':
-                self.filter = [layer_def.pooling_param.kernel_size]
+                self.filter = map(int, [layer_def.pooling_param.kernel_size])
                 if len(self.filter) == 1:
                     self.filter *= 2
-                self.pad = [layer_def.pooling_param.pad]
+                self.pad = map(int, [layer_def.pooling_param.pad])
                 if len(self.pad) == 0:
                     self.pad = [0, 0]
                 elif len(self.pad) == 1:
                     self.pad *= 2
-                self.stride = [layer_def.pooling_param.stride]
+                self.stride = map(int, [layer_def.pooling_param.stride])
                 if len(self.stride) == 0:
                     self.stride = [1, 1]
                 elif len(self.stride) == 1:
