@@ -20,7 +20,7 @@ class CaffeAdapter(BaseAdapter):
                  input_scale=None,
                  channel_swap=None,
                  transpose=None):
-        '''
+        """
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
         :param network_weights_filepath: Path to network weights to load.
@@ -38,7 +38,7 @@ class CaffeAdapter(BaseAdapter):
         :param transpose: transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
                this parameter should rarely change
         Specify as string path to file or tuple of one value per channel or None.
-        '''
+        """
 
         # Check that caffe root directory actually exists
         if not os.path.exists(caffe_root):
