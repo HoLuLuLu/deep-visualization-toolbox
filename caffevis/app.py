@@ -47,12 +47,12 @@ class CaffeVisApp(BaseApp):
 
         settings.adapter.load_network(settings)
 
-        self._net_channel_swap = settings.adapter._calculated_channel_swap
+        self._channel_swap = settings.adapter._calculated_channel_swap
 
-        if self._net_channel_swap is None:
-            self._net_channel_swap_inv = None
+        if self._channel_swap is None:
+            self._channel_swap_inv = None
         else:
-            self._net_channel_swap_inv = tuple([self._net_channel_swap.index(ii) for ii in range(len(self._net_channel_swap))])
+            self._channel_swap_inv = tuple([self._channel_swap.index(ii) for ii in range(len(self._channel_swap))])
 
         self.labels = None
         if self.settings.caffevis_labels:
@@ -1399,8 +1399,8 @@ class CaffeVisApp(BaseApp):
                     grad_blob = grad_blob[0]  # bc01 -> c01
                     grad_blob = grad_blob.transpose((1, 2, 0))  # c01 -> 01c
 
-                    if self._net_channel_swap_inv:
-                        grad_blob = grad_blob[:, :, self._net_channel_swap_inv]  # e.g. BGR -> RGB
+                    if self._channel_swap_inv:
+                        grad_blob = grad_blob[:, :, self._channel_swap_inv]  # e.g. BGR -> RGB
 
                     # split image to image0 and image1
                     if self.settings.is_siamese:

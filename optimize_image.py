@@ -10,7 +10,6 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import read_label_file
-from caffe_misc import layer_name_to_top_name
 
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
@@ -133,7 +132,8 @@ def main():
     lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
     push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
 
-    net, data_mean = settings.adapter.load_network(settings)
+    settings.adapter.load_network(settings)
+    data_mean = settings.adapter.get_data_mean()
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
@@ -141,24 +141,24 @@ def main():
         # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
         assert (settings.max_tracker_batch_size == 1)
 
-    current_data_shape = net.blobs['data'].shape
-    net.blobs['data'].reshape(args.batch_size, current_data_shape[1], current_data_shape[2], current_data_shape[3])
-    net.reshape()
+    settings.adapter.set_network_batch_size(args.batch_size)
 
     labels = None
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
+
+    current_data_shape = settings.adapter.get_layer_data('input').shape
 
     if data_mean is not None:
         if len(data_mean.shape) == 3:
             batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
         elif len(data_mean.shape) == 1:
             data_mean = data_mean[np.newaxis,:,np.newaxis,np.newaxis]
-            batched_data_mean = np.tile(data_mean, (args.batch_size,1,current_data_shape[2],current_data_shape[3]))
+            batched_data_mean = np.tile(data_mean, (args.batch_size, 1, current_data_shape[2], current_data_shape[3]))
     else:
         batched_data_mean = data_mean
 
-    optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
+    optimizer = GradientOptimizer(settings, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
                                   channel_swap_to_rgb = settings.adapter._calculated_channel_swap)
 
@@ -169,8 +169,7 @@ def main():
     # go over push layers
     for count, push_layer in enumerate(args.push_layers):
 
-        top_name = layer_name_to_top_name(net, push_layer)
-        blob = net.blobs[top_name].data
+        blob = settings.adapter.get_layer_data(push_layer)
         is_spatial = (len(blob.shape) == 4)
         channels = blob.shape[1]
 

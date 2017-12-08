@@ -39,7 +39,7 @@ def main():
     parser.add_argument('--search-min',    action='store_true', default=False, help='Should we also search for minimal activations?')
     args = parser.parse_args()
 
-    net, data_mean = settings.adapter.load_network(settings)
+    settings.adapter.load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings._calculated_siamese_network_format == 'siamese_batch_pair':
@@ -48,10 +48,7 @@ def main():
         assert (settings.max_tracker_batch_size == 1)
 
     # set network batch size
-    current_input_shape = net.blobs[net.inputs[0]].shape
-    current_input_shape[0] = settings.max_tracker_batch_size
-    net.blobs[net.inputs[0]].reshape(*current_input_shape)
-    net.reshape()
+    settings.adapter.set_network_batch_size(settings.max_tracker_batch_size)
 
     assert args.do_maxes or args.do_deconv or args.do_deconv_norm or args.do_backprop or args.do_backprop_norm or args.do_info, 'Specify at least one do_* option to output.'
 
@@ -74,12 +71,12 @@ def main():
 
         with WithTimer('Saved %d images per unit for %s units %d:%d.' % (args.N, normalized_layer_name, idx_begin, idx_end)):
 
-            output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
+            output_max_patches(settings, mt, normalized_layer_name, idx_begin, idx_end,
                                args.N, args.datadir, args.filelist, args.outdir, False,
                                (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
 
             if args.search_min:
-                output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
+                output_max_patches(settings, mt, normalized_layer_name, idx_begin, idx_end,
                                    args.N, args.datadir, args.filelist, args.outdir, True,
                                    (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
 

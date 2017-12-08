@@ -111,7 +111,7 @@ class CaffeAdapter(BaseAdapter):
         if self._transpose:
             net.transformer.set_transpose(net.inputs[0], self._transpose)
 
-        data_mean = CaffeAdapter.set_mean(self._data_mean_ref, self._generate_channelwise_mean, net)
+        data_mean = CaffeAdapter._set_mean(self._data_mean_ref, self._generate_channelwise_mean, net)
 
         # keep net and data_mean to be used later
         self._net = net
@@ -127,6 +127,9 @@ class CaffeAdapter(BaseAdapter):
         self._calc_blob_info()
 
         return
+
+    def get_data_mean(self):
+        return self._data_mean
 
     def get_layers_list(self):
 
@@ -212,6 +215,12 @@ class CaffeAdapter(BaseAdapter):
         output = self._net.forward(data=data_blob)
         return
 
+    def forward_all(self, data):
+        return self._net.forward_all(data=data)
+
+    def predict(self, im_batch, oversample=False):
+        return self._net.predict(im_batch, oversample=oversample)
+
     def backward_from_layer(self, start_layer_name, start_diff, diffs=None, zero_higher=False):
         """
         Backward pass starting from somewhere in the middle of the
@@ -242,6 +251,13 @@ class CaffeAdapter(BaseAdapter):
 
         self._net.deconv_from_layer(start_layer_name, start_diff, diffs, zero_higher, deconv_type)
         return
+
+    def set_network_batch_size(self, batch_size):
+        # set network batch size
+        current_input_shape = self._net.blobs[self._net.inputs[0]].shape
+        current_input_shape[0] = batch_size
+        self._net.blobs[self._net.inputs[0]].reshape(*current_input_shape)
+        self._net.reshape()
 
     def _process_network_proto(self, settings):
 
@@ -452,12 +468,12 @@ class CaffeAdapter(BaseAdapter):
             self._calculated_image_dims = input_shape[2:4]
 
     @staticmethod
-    def set_mean(data_mean_ref, generate_channelwise_mean, net):
+    def _set_mean(data_mean_ref, generate_channelwise_mean, net):
 
         if isinstance(data_mean_ref, basestring):
             # If the mean is given as a filename, load the file
             try:
-                data_mean = CaffeAdapter.load_mean_file(data_mean_ref)
+                data_mean = CaffeAdapter._load_mean_file(data_mean_ref)
             except IOError:
                 print '\n\nCound not load mean file:', data_mean_ref
                 print 'Ensure that the values in settings.py point to a valid model weights file, network'
@@ -491,7 +507,7 @@ class CaffeAdapter(BaseAdapter):
         return data_mean
 
     @staticmethod
-    def load_mean_file(data_mean_file):
+    def _load_mean_file(data_mean_file):
         filename, file_extension = os.path.splitext(data_mean_file)
         if file_extension == ".npy":
             # load mean from numpy array
@@ -515,3 +531,24 @@ class CaffeAdapter(BaseAdapter):
             print "Loaded mean from numpy file, data_mean.shape: ", data_mean.shape
 
         return data_mean
+
+    @staticmethod
+    def _shownet(net):
+        '''Print some stats about a net and its activations'''
+
+        print '%-41s%-31s%s' % ('', 'acts', 'act diffs')
+        print '%-45s%-31s%s' % ('', 'params', 'param diffs')
+        for k, v in net.blobs.items():
+            if k in net.params:
+                params = net.params[k]
+                for pp, blob in enumerate(params):
+                    if pp == 0:
+                        print '  ', 'P: %-5s' % k,
+                    else:
+                        print ' ' * 11,
+                    print '%-32s' % repr(blob.data.shape),
+                    print '%-30s' % ('(%g, %g)' % (blob.data.min(), blob.data.max())),
+                    print '(%g, %g)' % (blob.diff.min(), blob.diff.max())
+            print '%-5s' % k, '%-34s' % repr(v.data.shape),
+            print '%-30s' % ('(%g, %g)' % (v.data.min(), v.data.max())),
+            print '(%g, %g)' % (v.diff.min(), v.diff.max())

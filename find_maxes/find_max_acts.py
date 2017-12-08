@@ -32,6 +32,7 @@ def pickle_to_text(pickle_filename):
 
     return
 
+
 def main():
 
     parser = argparse.ArgumentParser(description='Finds images in a training set that cause max activation for a network; saves results in a pickled NetMaxTracker.')
@@ -45,7 +46,7 @@ def main():
 
     args = parser.parse_args()
 
-    net, data_mean = settings.adapter.load_network(settings)
+    settings.adapter.load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings._calculated_siamese_network_format == 'siamese_batch_pair':
@@ -54,16 +55,13 @@ def main():
         assert (settings.max_tracker_batch_size == 1)
 
     # set network batch size
-    current_input_shape = net.blobs[net.inputs[0]].shape
-    current_input_shape[0] = settings.max_tracker_batch_size
-    net.blobs[net.inputs[0]].reshape(*current_input_shape)
-    net.reshape()
+    settings.adapter.set_network_batch_size(settings.max_tracker_batch_size)
 
     with WithTimer('Scanning images'):
         if settings.is_siamese:
-            net_max_tracker = scan_pairs_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.search_min)
+            net_max_tracker = scan_pairs_for_maxes(settings, args.datadir, args.N, args.outdir, args.search_min)
         else: # normal operation
-            net_max_tracker = scan_images_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.search_min)
+            net_max_tracker = scan_images_for_maxes(settings, args.datadir, args.N, args.outdir, args.search_min)
 
     save_max_tracker_to_file(args.outfile, net_max_tracker)
 

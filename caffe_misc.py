@@ -5,27 +5,6 @@ import numpy as np
 from image_misc import norm01c
 
 
-def shownet(net):
-    '''Print some stats about a net and its activations'''
-    
-    print '%-41s%-31s%s' % ('', 'acts', 'act diffs')
-    print '%-45s%-31s%s' % ('', 'params', 'param diffs')
-    for k, v in net.blobs.items():
-        if k in net.params:
-            params = net.params[k]
-            for pp, blob in enumerate(params):
-                if pp == 0:
-                    print '  ', 'P: %-5s'%k,
-                else:
-                    print ' ' * 11,
-                print '%-32s' % repr(blob.data.shape),
-                print '%-30s' % ('(%g, %g)' % (blob.data.min(), blob.data.max())),
-                print '(%g, %g)' % (blob.diff.min(), blob.diff.max())
-        print '%-5s'%k, '%-34s' % repr(v.data.shape),
-        print '%-30s' % ('(%g, %g)' % (v.data.min(), v.data.max())),
-        print '(%g, %g)' % (v.diff.min(), v.diff.max())
-
-
 class RegionComputer(object):
     '''Computes regions of possible influcence from higher layers to lower layers.'''
 
@@ -211,7 +190,7 @@ def compute_data_layer_focus_area(is_spatial, ii, jj, settings, layer_name, size
     return [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end]
 
 
-def extract_patch_from_image(data, net, selected_input_index, settings,
+def extract_patch_from_image(data, selected_input_index, settings,
                              data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                              out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj):
     if settings.is_siamese:

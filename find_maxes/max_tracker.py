@@ -34,7 +34,7 @@ class MaxTrackerCropBatchRecord(object):
                  selected_input_index = None, ii = None, jj = None, recorded_val = None,
                  out_ii_start = None, out_ii_end = None, out_jj_start = None, out_jj_end = None, data_ii_start = None,
                  data_ii_end = None, data_jj_start = None, data_jj_end = None, im = None,
-                 denormalized_layer_name = None, denormalized_top_name = None, layer_format = None):
+                 denormalized_layer_name = None, layer_format = None):
         self.cc = cc
         self.channel_idx = channel_idx
         self.info_filename = info_filename
@@ -61,7 +61,6 @@ class MaxTrackerCropBatchRecord(object):
         self.data_jj_end = data_jj_end
         self.im = im
         self.denormalized_layer_name = denormalized_layer_name
-        self.denormalized_top_name = denormalized_top_name
         self.layer_format = layer_format
 
 
@@ -348,14 +347,13 @@ class NetMaxTracker(object):
         self.settings = settings
         self.siamese_helper = SiameseHelper(self.settings.layers_list)
 
-    def _init_with_net(self, net):
+    def _init_with_net(self):
         self.max_trackers = {}
 
         for layer_name in self.layers:
 
             print 'init layer: ', layer_name
-            top_name = layer_name_to_top_name(net, layer_name)
-            blob = net.blobs[top_name].data
+            blob = self.settings.adapter.get_layer_data(layer_name)
 
             # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
             # count as the same layer in terms of activations
@@ -371,18 +369,17 @@ class NetMaxTracker(object):
 
         self.init_done = True
 
-    def update(self, net, image_idx, net_unique_input_source, batch_index):
+    def update(self, image_idx, net_unique_input_source, batch_index):
         '''Updates the maxes found so far with the state of the given net. If a new max is found, it is stored together with the image_idx.'''
 
         if not self.init_done:
-            self._init_with_net(net)
+            self._init_with_net()
 
         for layer_name in self.layers:
 
             # print "processing layer %s" % layer_name
 
-            top_name = layer_name_to_top_name(net, layer_name)
-            blob = net.blobs[top_name].data
+            blob = self.settings.adapter.get_layer_data(layer_name)
 
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
@@ -479,14 +476,15 @@ class NetMaxTracker(object):
         self.settings = None
         self.siamese_helper = None
 
-def scan_images_for_maxes(settings, net, datadir, n_top, outdir, search_min):
+
+def scan_images_for_maxes(settings, datadir, n_top, outdir, search_min):
     image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
 
     tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
-    net_input_dims = net.blobs['data'].data.shape[2:4]
+    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size
@@ -523,13 +521,13 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, search_min):
             # batch predict
             with WithTimer('Predict on batch  ', quiet = not do_print):
                 im_batch = [record.im for record in batch]
-                net.predict(im_batch, oversample = False)   # Just take center crop
+                settings.adapter.predict(im_batch, oversample=False)  # Just take center crop
 
             # go over batch and update statistics
             for i in range(0,batch_index):
 
                 with WithTimer('Update    ', quiet = not do_print):
-                    tracker.update(net, batch[i].image_idx, net_unique_input_source=batch[i].filename, batch_index=i)
+                    tracker.update(batch[i].image_idx, net_unique_input_source=batch[i].filename, batch_index=i)
 
             batch_index = 0
 
@@ -537,14 +535,14 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, search_min):
     return tracker
 
 
-def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, search_min):
+def scan_pairs_for_maxes(settings, datadir, n_top, outdir, search_min):
     image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
 
     tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
-    net_input_dims = net.blobs['data'].data.shape[2:4]
+    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size
@@ -593,12 +591,12 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, search_min):
 
             with WithTimer('Predict   ', quiet=not do_print):
                 im_batch = [record.im for record in batch]
-                net.predict(im_batch, oversample=False)
+                settings.adapter.predict(im_batch, oversample=False)
 
             # go over batch and update statistics
             for i in range(0,batch_index):
                 with WithTimer('Update    ', quiet=not do_print):
-                    tracker.update(net, batch[i].image_idx, net_unique_input_source=batch[i].images_pair, batch_index=i)
+                    tracker.update(batch[i].image_idx, net_unique_input_source=batch[i].images_pair, batch_index=i)
 
             batch_index = 0
 
@@ -628,13 +626,12 @@ def save_representations(settings, net, datadir, filelist, layer_name, first_N =
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Store     ', quiet = not do_print):
-            top_name = layer_name_to_top_name(net, layer_name)
             if rep is None:
-                rep_shape = net.blobs[top_name].data[0].shape   # e.g. (256,13,13)
+                rep_shape = settings.adapter.get_layer_data()[0].shape
                 rep = np.zeros((len(image_indices),) + rep_shape)   # e.g. (1000,256,13,13)
                 indices = [0] * len(image_indices)
             indices[ii] = image_idx
-            rep[ii] = net.blobs[top_name].data[0]
+            rep[ii] = settings.adapter.get_layer_data(layer_name)[0]
 
     print 'done!'
     return indices,rep
@@ -674,7 +671,7 @@ def generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_de
     return (info_filename, maxim_filenames, deconv_filenames, deconvnorm_filenames, backprop_filenames, backpropnorm_filenames)
 
 
-def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_end, num_top, datadir, filelist, outdir, search_min, do_which):
+def output_max_patches(settings, max_tracker, layer_name, idx_begin, idx_end, num_top, datadir, filelist, outdir, search_min, do_which):
     do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, do_info = do_which
     assert do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm or do_info, 'nothing to do'
 
@@ -703,9 +700,9 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
         mt.is_spatial = mt.is_conv
 
     size_ii, size_jj = get_max_data_extent(settings, layer_name, mt.is_spatial)
-    data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
+    data_size_ii, data_size_jj = settings.adapter.get_layer_data('input').shape[2:4]
 
-    net_input_dims = net.blobs['data'].data.shape[2:4]
+    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size
@@ -878,7 +875,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
 
                 with WithTimer('Predict on batch  ', quiet = not do_print):
                     im_batch = [record.im for record in batch]
-                    net.predict(im_batch, oversample = False)
+                    settings.adapter.predict(im_batch, oversample=False)
 
                 # go over batch and update statistics
                 for i in range(0, batch_index):
@@ -886,22 +883,23 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     # in siamese network, we wish to return from the normalized layer name and selected input index to the
                     # denormalized layer name, e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
                     batch[i].denormalized_layer_name = siamese_helper.denormalize_layer_name_for_max_tracker(layer_name, batch[i].selected_input_index)
-                    batch[i].denormalized_top_name = layer_name_to_top_name(net, batch[i].denormalized_layer_name)
                     batch[i].layer_format = siamese_helper.get_layer_format_by_layer_name(layer_name)
 
-                    if len(net.blobs[batch[i].denormalized_top_name].data.shape) == 4:
+                    layer_data = settings.adapter.get_layer_data(batch[i].denormalized_layer_name)
+
+                    if len(layer_data.shape) == 4:
                         if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
-                            reproduced_val = net.blobs[batch[i].denormalized_top_name].data[batch[i].selected_input_index, batch[i].channel_idx, batch[i].ii, batch[i].jj]
+                            reproduced_val = layer_data[batch[i].selected_input_index, batch[i].channel_idx, batch[i].ii, batch[i].jj]
 
                         else: # normal network, or siamese in siamese_layer_pair format
-                            reproduced_val = net.blobs[batch[i].denormalized_top_name].data[i, batch[i].channel_idx, batch[i].ii, batch[i].jj]
+                            reproduced_val = layer_data[i, batch[i].channel_idx, batch[i].ii, batch[i].jj]
 
                     else:
                         if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
-                            reproduced_val = net.blobs[batch[i].denormalized_top_name].data[batch[i].selected_input_index, batch[i].channel_idx]
+                            reproduced_val = layer_data[batch[i].selected_input_index, batch[i].channel_idx]
 
                         else:  # normal network, or siamese in siamese_layer_pair format
-                            reproduced_val = net.blobs[batch[i].denormalized_top_name].data[i, batch[i].channel_idx]
+                            reproduced_val = layer_data[i, batch[i].channel_idx]
 
                     if abs(reproduced_val - batch[i].recorded_val) > .1:
                         print 'Warning: recorded value %s is suspiciously different from reproduced value %s. Is the filelist the same?' % (batch[i].recorded_val, reproduced_val)
@@ -909,7 +907,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     if do_maxes:
                         #grab image from data layer, not from im (to ensure preprocessing / center crop details match between image and deconv/backprop)
 
-                        out_arr = extract_patch_from_image(net.blobs['data'].data[i], net, batch[i].selected_input_index, settings,
+                        out_arr = extract_patch_from_image(settings.adapter.get_layer_data('input')[i], batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
                                                            batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
 
@@ -924,7 +922,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     # separate batches
 
                     for i in range(0, batch_index):
-                        diffs = net.blobs[batch[i].denormalized_top_name].diff * 0
+                        diffs = settings.adapter.get_layer_diff(batch[i].denormalized_layer_name) * 0
 
                         if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
                             if diffs.shape[0] == 2:
@@ -949,7 +947,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                         with WithTimer('Deconv    ', quiet = not do_print):
                             settings.adapter.deconv_from_layer(batch[i].denormalized_layer_name, diffs, zero_higher=True, deconv_type='Guided Backprop')
 
-                        out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
+                        out_arr = extract_patch_from_image(settings.adapter.get_layer_diff('input')[i], batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
                                                            batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
 
@@ -968,7 +966,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                 if do_backprop or do_backprop_norm:
 
                     for i in range(0, batch_index):
-                        diffs = net.blobs[batch[i].denormalized_top_name].diff * 0
+                        diffs = settings.adapter.get_layer_diff(batch[i].denormalized_layer_name) * 0
 
                         if len(diffs.shape) == 4:
                             diffs[i, batch[i].channel_idx, batch[i].ii, batch[i].jj] = 1.0
@@ -980,7 +978,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
 
                     for i in range(0, batch_index):
 
-                        out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
+                        out_arr = extract_patch_from_image(settings.adapter.get_layer_diff('input')[i], batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
                                                            batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
 

@@ -14,8 +14,7 @@ plt.rcParams['image.cmap'] = 'gray'
 from misc import mkdir_p, combine_dicts
 from image_misc import saveimagesc, saveimagescc
 
-from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image, \
-    layer_name_to_top_name
+from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image
 
 from siamese_helper import SiameseHelper
 
@@ -162,9 +161,8 @@ class FindResults(object):
 class GradientOptimizer(object):
     '''Finds images by gradient.'''
     
-    def __init__(self, settings, net, batched_data_mean, labels = None, label_layers = [], channel_swap_to_rgb = None):
+    def __init__(self, settings, batched_data_mean, labels = None, label_layers = [], channel_swap_to_rgb = None):
         self.settings = settings
-        self.net = net
         self.batched_data_mean = batched_data_mean
         self.labels = labels if labels else ['labels not provided' for ii in range(1000)]
         self.label_layers = label_layers if label_layers else list()
@@ -203,7 +201,7 @@ class GradientOptimizer(object):
 
         np.random.seed(params.rand_seed)
 
-        input_shape = self.net.blobs['data'].data.shape
+        input_shape = self.settings.adapter.get_layer_data('input').shape
 
         if params.start_at == 'mean_plus_rand':
             x0 = np.random.normal(0, 10, input_shape)
@@ -235,8 +233,7 @@ class GradientOptimizer(object):
         is_labeled_unit = params.push_layer in self.label_layers
 
         # Sanity checks for conv vs FC layers
-        top_name = layer_name_to_top_name(self.net, params.push_layer)
-        data_shape = self.net.blobs[top_name].data.shape
+        data_shape = self.settings.adapter.get_layer_data(params.push_layer).shape
         assert len(data_shape) in (2,4), 'Expected shape of length 2 (for FC) or 4 (for conv) layers but shape is %s' % repr(data_shape)
         is_spatial = (len(data_shape) == 4)
 
@@ -266,10 +263,9 @@ class GradientOptimizer(object):
             else:
                 xx = minimum(255.0, maximum(0.0, xx)) # Crop all values to [0,255]
             # 1. Push data through net
-            out = self.net.forward_all(data = xx)
-            #shownet(net)
-            top_name = layer_name_to_top_name(self.net, params.push_layer)
-            acts = self.net.blobs[top_name].data
+            out = self.settings.adapter.forward_all(xx)
+            # self.settings.adapter._shownet(net)
+            acts = self.settings.adapter.get_layer_data(params.push_layer)
 
             layer_format = self.siamese_helper.get_layer_format_by_layer_name(params.push_layer)
 
@@ -336,8 +332,7 @@ class GradientOptimizer(object):
 
 
             # 4. Do backward pass to get gradient
-            top_name = layer_name_to_top_name(self.net, params.push_layer)
-            diffs = self.net.blobs[top_name].diff * 0
+            diffs = self.settings.adapter.get_layer_diff(params.push_layer) * 0
             if not is_spatial:
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
@@ -519,14 +514,14 @@ class GradientOptimizer(object):
                 is_spatial = params.is_spatial
                 layer_name = params.push_layer
                 size_ii, size_jj = get_max_data_extent(self.settings, layer_name, is_spatial)
-                data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
+                data_size_ii, data_size_jj = self.settings.adapter.get_layer_data('input').shape[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
                     compute_data_layer_focus_area(is_spatial, temp_ii, temp_jj, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
 
                 selected_input_index = self.find_selected_input_index(layer_name)
 
-                out_arr = extract_patch_from_image(results[batch_index].best_xx, self.net, selected_input_index, self.settings,
+                out_arr = extract_patch_from_image(results[batch_index].best_xx, selected_input_index, self.settings,
                                                    data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                                                    out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
@@ -540,7 +535,7 @@ class GradientOptimizer(object):
                                 best_X_image_name=best_X_name)
 
                 if self.settings.optimize_image_generate_plus_mean:
-                    out_arr_pm = extract_patch_from_image(results[batch_index].best_xx + self.batched_data_mean, self.net, selected_input_index, self.settings,
+                    out_arr_pm = extract_patch_from_image(results[batch_index].best_xx + self.batched_data_mean, selected_input_index, self.settings,
                                                        data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                                                        out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
