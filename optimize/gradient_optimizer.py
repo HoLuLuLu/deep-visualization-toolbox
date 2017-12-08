@@ -348,7 +348,7 @@ class GradientOptimizer(object):
                 diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
             else:
                 diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
-            backout = self.net.backward_from_layer(params.push_layer, diffs if is_spatial else diffs[:,:,0,0])
+            backout = self.settings.adapter.backward_from_layer(params.push_layer, diffs if is_spatial else diffs[:,:,0,0])
 
             grad = backout['data'].copy()
             reshaped_grad = np.reshape(grad, (params.batch_size, -1))
@@ -518,7 +518,7 @@ class GradientOptimizer(object):
 
                 is_spatial = params.is_spatial
                 layer_name = params.push_layer
-                size_ii, size_jj = get_max_data_extent(self.net, self.settings, layer_name, is_spatial)
+                size_ii, size_jj = get_max_data_extent(self.settings, layer_name, is_spatial)
                 data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \

@@ -11,11 +11,10 @@ from caffevis_app_state import BackpropMode
 class CaffeProcThread(CodependentThread):
     '''Runs Caffe in separate thread.'''
 
-    def __init__(self, settings, net, state, loop_sleep, pause_after_keys, heartbeat_required):
+    def __init__(self, settings, state, loop_sleep, pause_after_keys, heartbeat_required):
         CodependentThread.__init__(self, heartbeat_required)
         self.daemon = True
-        self.net = net
-        self.input_dims = self.net.blobs['data'].data.shape[2:4]    # e.g. (227,227)
+        self.input_dims = settings.adapter.get_layer_data('input').shape[2:4]    # e.g. (227,227)
         self.state = state
         self.last_process_finished_at = None
         self.last_process_elapsed = None
@@ -77,21 +76,21 @@ class CaffeProcThread(CodependentThread):
                     im_small = resize_without_fit(frame, self.input_dims)
 
                 with WithTimer('CaffeProcThread:forward', quiet = self.debug_level < 1):
-                    net_preproc_forward(self.settings, self.net, im_small, self.input_dims)
+                    net_preproc_forward(self.settings, im_small, self.input_dims)
 
             if run_back:
 
                 if back_mode == BackpropMode.GRAD:
                     with WithTimer('CaffeProcThread:backward', quiet = self.debug_level < 1):
-                        self.state.backward_from_layer(self.net, backprop_layer_def, backprop_unit)
+                        self.state.backward_from_layer(backprop_layer_def, backprop_unit)
 
                 elif back_mode == BackpropMode.DECONV_ZF:
                     with WithTimer('CaffeProcThread:deconv', quiet = self.debug_level < 1):
-                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Zeiler & Fergus')
+                        self.state.deconv_from_layer(backprop_layer_def, backprop_unit, 'Zeiler & Fergus')
 
                 elif back_mode == BackpropMode.DECONV_GB:
                     with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
-                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop')
+                        self.state.deconv_from_layer(backprop_layer_def, backprop_unit, 'Guided Backprop')
 
                 with self.state.lock:
                     self.state.back_stale = False

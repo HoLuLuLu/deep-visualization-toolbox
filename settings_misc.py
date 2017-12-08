@@ -5,7 +5,7 @@ sys.path.insert(0,parentdir)
 
 import cPickle as pickle
 
-from caffe_misc import layer_name_to_top_name, get_max_data_extent
+from caffe_misc import get_max_data_extent
 from misc import mkdir_p
 
 
@@ -16,7 +16,7 @@ def replace_magic_DVT_ROOT(path):
 def _get_receptive_fields_cache_filename(settings):
     return os.path.join(settings.caffevis_outputs_dir, 'receptive_fields_cache.pickled')
 
-def get_receptive_field(settings, net, layer_name):
+def get_receptive_field(settings, layer_name):
 
     # flag which indicates whether the dictionary was changed hence we need to write it to cache
     should_save_to_cache = False
@@ -40,11 +40,10 @@ def get_receptive_field(settings, net, layer_name):
     # calculate lazy
     if not settings._receptive_field_per_layer.has_key(layer_name):
         print "Calculating receptive fields for layer %s" % (layer_name)
-        top_name = layer_name_to_top_name(net, layer_name)
-        if top_name is not None:
-            blob = net.blobs[top_name].data
+        blob = settings.adapter.get_layer_data(layer_name)
+        if blob is not None:
             is_spatial = (len(blob.shape) == 4)
-            layer_receptive_field = get_max_data_extent(net, settings, layer_name, is_spatial)
+            layer_receptive_field = get_max_data_extent(settings, layer_name, is_spatial)
             settings._receptive_field_per_layer[layer_name] = layer_receptive_field
             should_save_to_cache = True
 

@@ -9,7 +9,7 @@ from image_misc import get_tiles_height_width, load_image, ensure_uint255_and_re
     cv2_typeset_text, to_255
 
 
-def net_preproc_forward(settings, net, img, data_hw):
+def net_preproc_forward(settings, img, data_hw):
 
     if settings.is_siamese and img.shape[2] == 6:
         appropriate_shape = data_hw + (6,)
@@ -20,11 +20,8 @@ def net_preproc_forward(settings, net, img, data_hw):
 
     assert img.shape == appropriate_shape, 'img is wrong size (got %s but expected %s)' % (img.shape, appropriate_shape)
 
-    data_blob = net.transformer.preprocess('data', img)                # e.g. (3, 227, 227), mean subtracted and scaled to [0,255]
-    data_blob = data_blob[np.newaxis,:,:,:]                   # e.g. (1, 3, 227, 227)
-    output = net.forward(data=data_blob)
-
-    return output
+    settings.adapter.forward(img)
+    return
 
 
 def get_pretty_layer_name(settings, layer_name):

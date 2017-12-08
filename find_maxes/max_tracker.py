@@ -10,7 +10,7 @@ import numpy as np
 from misc import mkdir_p, get_files_list
 from image_misc import resize_without_fit, load_image
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
-    compute_data_layer_focus_area, layer_name_to_top_name
+    compute_data_layer_focus_area
 from siamese_helper import SiameseHelper
 
 from jby_misc import WithTimer
@@ -702,7 +702,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     if hasattr(mt, 'is_conv'):
         mt.is_spatial = mt.is_conv
 
-    size_ii, size_jj = get_max_data_extent(net, settings, layer_name, mt.is_spatial)
+    size_ii, size_jj = get_max_data_extent(settings, layer_name, mt.is_spatial)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
 
     net_input_dims = net.blobs['data'].data.shape[2:4]
@@ -947,7 +947,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                                 diffs[i, batch[i].channel_idx] = 1.0
 
                         with WithTimer('Deconv    ', quiet = not do_print):
-                            net.deconv_from_layer(batch[i].denormalized_layer_name, diffs, zero_higher=True, deconv_type='Guided Backprop')
+                            settings.adapter.deconv_from_layer(batch[i].denormalized_layer_name, diffs, zero_higher=True, deconv_type='Guided Backprop')
 
                         out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
@@ -976,7 +976,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                             diffs[i, batch[i].channel_idx] = 1.0
 
                     with WithTimer('Backward batch  ', quiet = not do_print):
-                        net.backward_from_layer(batch[i].denormalized_layer_name, diffs)
+                        settings.adapter.backward_from_layer(batch[i].denormalized_layer_name, diffs)
 
                     for i in range(0, batch_index):
 

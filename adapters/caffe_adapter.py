@@ -3,6 +3,7 @@ import os
 import numpy as np
 
 from adapters.base_adapter import BaseAdapter
+from image_misc import get_tiles_height_width_ratio
 from settings_misc import replace_magic_DVT_ROOT
 
 class CaffeAdapter(BaseAdapter):
@@ -88,6 +89,8 @@ class CaffeAdapter(BaseAdapter):
 
         import caffe
 
+        self._settings = settings
+
         self.init_thread_specific()
 
         self._process_network_proto(settings)
@@ -110,7 +113,135 @@ class CaffeAdapter(BaseAdapter):
 
         data_mean = CaffeAdapter.set_mean(self._data_mean_ref, self._generate_channelwise_mean, net)
 
-        return net, data_mean
+        # keep net and data_mean to be used later
+        self._net = net
+        self._data_mean = data_mean
+
+        # set network batch size to 1
+        current_input_shape = self._net.blobs[self._net.inputs[0]].shape
+        current_input_shape[0] = 1
+        self._net.blobs[self._net.inputs[0]].reshape(*current_input_shape)
+        self._net.reshape()
+
+        # calc blob info
+        self._calc_blob_info()
+
+        return
+
+    def get_layers_list(self):
+
+        layers_list = []
+
+        for layer_name in list(self._net._layer_names):
+
+            # skip inplace layers
+            if len(self._net.top_names[layer_name]) == 1 and len(self._net.bottom_names[layer_name]) == 1 and \
+                            self._net.top_names[layer_name][0] == self._net.bottom_names[layer_name][0]:
+                continue
+
+            layers_list.append(layer_name)
+
+        return layers_list
+
+    def _calc_blob_info(self):
+        '''For each blob, save the number of filters and precompute
+        tile arrangement (needed by CaffeVisAppState to handle keyboard navigation).
+        '''
+        self._net_blob_info = {}
+        for key in self._net.blobs.keys():
+            self._net_blob_info[key] = {}
+            # Conv example: (1, 96, 55, 55)
+            # FC example: (1, 1000)
+            blob_shape = self._net.blobs[key].data.shape
+
+            # handle case when output is a single number per image in the batch
+            if (len(blob_shape) == 1):
+                blob_shape = (blob_shape[0], 1)
+
+            self._net_blob_info[key]['isconv'] = (len(blob_shape) == 4)
+            self._net_blob_info[key]['data_shape'] = blob_shape[1:]  # Chop off batch size
+            self._net_blob_info[key]['n_tiles'] = blob_shape[1]
+            self._net_blob_info[key]['tiles_rc'] = get_tiles_height_width_ratio(blob_shape[1], self._settings.caffevis_layers_aspect_ratio)
+            self._net_blob_info[key]['tile_rows'] = self._net_blob_info[key]['tiles_rc'][0]
+            self._net_blob_info[key]['tile_cols'] = self._net_blob_info[key]['tiles_rc'][1]
+
+        return
+
+    def get_blob_info(self, layer_name):
+
+        top_name = self._layer_name_to_top_name(layer_name)
+        return self._net_blob_info[top_name]
+
+    def _layer_name_to_top_name(self, layer_name):
+
+        if self._net.top_names.has_key(layer_name) and len(self._net.top_names[layer_name]) >= 1:
+            return self._net.top_names[layer_name][0]
+
+        else:
+            return None
+
+    def get_layer_weights(self, layer_name):
+        if self._net.params.has_key(layer_name):
+            return self._net.params[layer_name][0].data
+        else:
+            return None
+
+    def get_layer_bias(self, layer_name):
+        if self._net.params.has_key(layer_name):
+            return self._net.params[layer_name][1].data
+        else:
+            return None
+
+    def get_layer_data(self, layer_name):
+        top_name = self._layer_name_to_top_name(layer_name)
+        if top_name in self._net.blobs:
+            return self._net.blobs[top_name].data
+        else:
+            return None
+
+    def get_layer_diff(self, layer_name):
+        top_name = self._layer_name_to_top_name(layer_name)
+        if top_name in self._net.blobs:
+            return self._net.blobs[top_name].diff
+        else:
+            return None
+
+    def forward(self, img):
+        data_blob = self._net.transformer.preprocess('data', img)  # e.g. (3, 227, 227), mean subtracted and scaled to [0,255]
+        data_blob = data_blob[np.newaxis, :, :, :]  # e.g. (1, 3, 227, 227)
+        output = self._net.forward(data=data_blob)
+        return
+
+    def backward_from_layer(self, start_layer_name, start_diff, diffs=None, zero_higher=False):
+        """
+        Backward pass starting from somewhere in the middle of the
+        network, starting with the provided diffs.
+
+        :param start_layer_name: layer at which to begin the backward pass
+        :param start_diff: diff to set at start_name layer
+        :param diffs: list of diffs to return in addition to bottom diffs
+        :param zero_higher: whether or not to zero out higher layers to reflect the true 0 derivative or leave them alone to save time
+        :return: n/a
+        """
+
+        self._net.backward_from_layer(start_layer_name, start_diff, diffs, zero_higher)
+        return
+
+    def deconv_from_layer(self, start_layer_name, start_diff, diffs=None, zero_higher=False, deconv_type='Zeiler & Fergus'):
+        """
+        Deconv pass starting from somewhere in the middle of the
+        network, starting with the provided diffs.
+
+        :param start_layer_name: layer at which to begin the deconv pass
+        :param start_diff: diff to set at start_name layer
+        :param diffs: list of diffs to return in addition to bottom diffs
+        :param zero_higher: whether or not to zero out higher layers to reflect the true 0 derivative or leave them alone to save time
+        :param deconv_type: either 'Zeiler & Fergus' or 'Guided Backprop'
+        :return: n/a
+        """
+
+        self._net.deconv_from_layer(start_layer_name, start_diff, diffs, zero_higher, deconv_type)
+        return
 
     def _process_network_proto(self, settings):
 

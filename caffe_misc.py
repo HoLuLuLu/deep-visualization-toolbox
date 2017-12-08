@@ -150,22 +150,13 @@ def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
     skimage.io.imsave(filename, img)
 
 
-def layer_name_to_top_name(net, layer_name):
-
-    if net.top_names.has_key(layer_name) and len(net.top_names[layer_name]) >= 1:
-        return net.top_names[layer_name][0]
-
-    else:
-        return None
-
-def get_max_data_extent(net, settings, layer_name, is_spatial):
+def get_max_data_extent(settings, layer_name, is_spatial):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
 
-    data_size = net.blobs['data'].data.shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
+    data_size = settings.adapter.get_layer_data('input').shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
 
     if is_spatial:
-        top_name = layer_name_to_top_name(net, layer_name)
-        conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
+        conv_size = settings.adapter.get_layer_data(layer_name).shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
         data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_slice_middle)
         data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5

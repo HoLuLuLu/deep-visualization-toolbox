@@ -30,7 +30,7 @@ from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, B
     ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     get_image_from_files
-from caffe_misc import layer_name_to_top_name, save_caffe_image
+from caffe_misc import save_caffe_image
 from siamese_helper import SiameseHelper
 from settings_misc import get_receptive_field
 
@@ -45,13 +45,7 @@ class CaffeVisApp(BaseApp):
         self.settings = settings
         self.bindings = key_bindings
 
-        self.net, self._data_mean = settings.adapter.load_network(settings)
-
-        # set network batch size to 1
-        current_input_shape = self.net.blobs[self.net.inputs[0]].shape
-        current_input_shape[0] = 1
-        self.net.blobs[self.net.inputs[0]].reshape(*current_input_shape)
-        self.net.reshape()
+        settings.adapter.load_network(settings)
 
         self._net_channel_swap = settings.adapter._calculated_channel_swap
 
@@ -77,13 +71,13 @@ class CaffeVisApp(BaseApp):
         from jpg_vis_loading_thread import JPGVisLoadingThread
 
         self.live_vis = live_vis
-        self.state = CaffeVisAppState(self.net, self.settings, self.bindings, live_vis)
+        self.state = CaffeVisAppState(self.settings, self.bindings, live_vis)
         self.state.drawing_stale = True
         self.header_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state.get_headers()]
 
         if self.proc_thread is None or not self.proc_thread.is_alive():
             # Start thread if it's not already running
-            self.proc_thread = CaffeProcThread(self.settings, self.net, self.state,
+            self.proc_thread = CaffeProcThread(self.settings, self.state,
                                                self.settings.caffevis_frame_wait_sleep,
                                                self.settings.caffevis_pause_after_keys,
                                                self.settings.caffevis_heartbeat_required)
@@ -197,7 +191,7 @@ class CaffeVisApp(BaseApp):
         clr_0 = to_255(self.settings.caffevis_class_clr_0)
         clr_1 = to_255(self.settings.caffevis_class_clr_1)
 
-        probs_flat = self.net.blobs[layer_name_to_top_name(self.net, self.settings.caffevis_prob_layer)].data.flatten()
+        probs_flat = self.settings.adapter.get_layer_data(self.settings.caffevis_prob_layer).flatten()
         top_5 = probs_flat.argsort()[-1:-6:-1]
 
         strings = []
@@ -304,7 +298,7 @@ class CaffeVisApp(BaseApp):
 
             print >> status2, 'Layer size: %s' % (self.state.get_layer_output_size_string())
 
-            print >> status2, '| Receptive field:', '%s' % (str(get_receptive_field(self.settings, self.net, default_layer_name)))
+            print >> status2, '| Receptive field:', '%s' % (str(get_receptive_field(self.settings, default_layer_name)))
 
             print >> status2, '| Input: %s' % (str(self.state.next_filename))
 
@@ -446,9 +440,9 @@ class CaffeVisApp(BaseApp):
 
             if self.state.layers_show_back:
 
-                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_diff_blobs(self.net)
+                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_diff_blobs()
             else:
-                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_data_blobs(self.net)
+                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_data_blobs()
 
             # Promote FC layers with shape (n) to have shape (n,1,1)
             if len(layer_dat_3D_0.shape) == 1:
@@ -470,9 +464,9 @@ class CaffeVisApp(BaseApp):
 
         else:
             if self.state.layers_show_back:
-                layer_dat_3D = self.state.get_single_selected_diff_blob(self.net)
+                layer_dat_3D = self.state.get_single_selected_diff_blob()
             else:
-                layer_dat_3D = self.state.get_single_selected_data_blob(self.net)
+                layer_dat_3D = self.state.get_single_selected_data_blob()
 
         # Promote FC layers with shape (n) to have shape (n,1,1)
         if len(layer_dat_3D.shape) == 1:
@@ -480,8 +474,7 @@ class CaffeVisApp(BaseApp):
 
         n_tiles = layer_dat_3D.shape[0]
 
-        top_name = layer_name_to_top_name(self.net, default_layer_name)
-        tile_rows, tile_cols = self.state.net_blob_info[top_name]['tiles_rc']
+        tile_rows, tile_cols = self.settings.adapter.get_blob_info(default_layer_name)['tiles_rc']
 
         display_2D = None
         display_3D_highres = None
@@ -519,7 +512,7 @@ class CaffeVisApp(BaseApp):
 
             elif self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM:
                 display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_histograms(
-                    self.net, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
+                    self.settings.adapter, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
                     show_layer_summary=self.state.cursor_area == 'top')
 
             elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
@@ -544,7 +537,7 @@ class CaffeVisApp(BaseApp):
 
             elif self.state.pattern_mode == PatternMode.WEIGHTS_CORRELATION:
                 display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_correlation(
-                    self.net, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
+                    self.settings.adapter, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
                     show_layer_summary=True)
 
             else:
@@ -649,13 +642,13 @@ class CaffeVisApp(BaseApp):
             if self.state.show_maximal_score:
                 if self.state.siamese_view_mode_has_two_images():
                     if self.state.layers_show_back:
-                        blob1, blob2 = self.state.get_siamese_selected_diff_blobs(self.net)
+                        blob1, blob2 = self.state.get_siamese_selected_diff_blobs()
 
                         if len(blob1.shape) == 1:
                             value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
                             text_to_display += 'grad: ' + str(value1) + " " + str(value2)
                     else:
-                        blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
+                        blob1, blob2 = self.state.get_siamese_selected_data_blobs()
 
                         if len(blob1.shape) == 1:
                             value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
@@ -663,13 +656,13 @@ class CaffeVisApp(BaseApp):
 
                 else:
                     if self.state.layers_show_back:
-                        blob = self.state.get_single_selected_diff_blob(self.net)
+                        blob = self.state.get_single_selected_diff_blob()
 
                         if len(blob.shape) == 1:
                             value = blob[self.state.selected_unit]
                             text_to_display += 'grad: ' + str(value)
                     else:
-                        blob = self.state.get_single_selected_data_blob(self.net)
+                        blob = self.state.get_single_selected_data_blob()
 
                         if len(blob.shape) == 1:
                             value = blob[self.state.selected_unit]
@@ -816,7 +809,7 @@ class CaffeVisApp(BaseApp):
         return display_3D
 
 
-    def load_weights_histograms(self, net, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
+    def load_weights_histograms(self, adapter, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
 
         is_layer_summary_loaded = False
         display_2D = None
@@ -859,8 +852,8 @@ class CaffeVisApp(BaseApp):
                     print "calculating weights histogram for layer %s channel %d out of %d" % (layer_name, channel_idx, n_channels)
 
                 # get vector of weights
-                weights = net.params[layer_name][0].data[channel_idx].flatten()
-                bias = net.params[layer_name][1].data[channel_idx]
+                weights = adapter.get_layer_weights(layer_name)[channel_idx].flatten()
+                bias = adapter.get_layer_bias(layer_name)[channel_idx]
 
                 # create histogram
                 hist, bin_edges = np.histogram(weights, bins=50)
@@ -932,7 +925,9 @@ class CaffeVisApp(BaseApp):
                     # calculate weights histogram image
 
                     # check if layer has weights at all
-                    if not net.params.has_key(layer_name):
+                    weights = adapter.get_layer_weights(layer_name)
+
+                    if weights is None:
                         return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
 
                     # pattern_image_key_layer = (layer_name, "weights_histogram", True)
@@ -941,12 +936,14 @@ class CaffeVisApp(BaseApp):
                     # self.img_cache.set(pattern_image_key_details, display_3D_highres)
                     # self.img_cache.set(pattern_image_key_layer, display_3D_highres_summary)
 
+                    weights = weights.flatten()
+                    bias = adapter.get_layer_bias(layer_name).flatten()
+
                     if show_layer_summary:
 
                         half_pane_shape = (pane_shape[0], pane_shape[1] / 2)
 
                         # generate weights histogram for layer
-                        weights = net.params[layer_name][0].data.flatten()
                         hist, bin_edges = np.histogram(weights, bins=50)
 
                         width = 0.7 * (bin_edges[1] - bin_edges[0])
@@ -963,7 +960,6 @@ class CaffeVisApp(BaseApp):
                         ax.cla()
 
                         # generate bias histogram for layer
-                        bias = net.params[layer_name][1].data.flatten()
                         hist, bin_edges = np.histogram(bias, bins=50)
 
                         width = 0.7 * (bin_edges[1] - bin_edges[0])
@@ -1038,7 +1034,7 @@ class CaffeVisApp(BaseApp):
 
         return display_2D, display_3D, display_3D_highres, is_layer_summary_loaded
 
-    def load_weights_correlation(self, net, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
+    def load_weights_correlation(self, adapter, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
 
         is_layer_summary_loaded = False
         display_2D = None
@@ -1082,14 +1078,16 @@ class CaffeVisApp(BaseApp):
                     # calculate weights correlation image
 
                     # check if layer has weights at all
-                    if not net.params.has_key(layer_name):
+                    weights = adapter.get_layer_weights(layer_name)
+
+                    if weights is None:
                         return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
 
                     # skip layers with only one channel
                     if n_channels == 1:
                         return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
 
-                    data_unroll = net.params[layer_name][0].data.reshape((n_channels, -1))  # Note: no copy eg (96,3025). Does nothing if not is_spatial
+                    data_unroll = weights.reshape((n_channels, -1))  # Note: no copy eg (96,3025). Does nothing if not is_spatial
 
                     corr = np.corrcoef(data_unroll)
 
@@ -1376,7 +1374,7 @@ class CaffeVisApp(BaseApp):
                 # if selection is frozen we use the currently selected layer as target for visualization
                 if self.state.backprop_selection_frozen:
                     if self.state.siamese_view_mode_has_two_images():
-                        grad_blob1, grad_blob2 = self.state.get_siamese_selected_diff_blobs(self.net)
+                        grad_blob1, grad_blob2 = self.state.get_siamese_selected_diff_blobs()
 
                         if len(grad_blob1.shape) == 1:
                             no_spatial_info = True
@@ -1388,7 +1386,7 @@ class CaffeVisApp(BaseApp):
                         has_pair_inputs = True
 
                     else:
-                        grad_blob = self.state.get_single_selected_diff_blob(self.net)
+                        grad_blob = self.state.get_single_selected_diff_blob()
                         if len(grad_blob.shape) == 1:
                             no_spatial_info = True
                         if len(grad_blob.shape) == 3:
@@ -1396,7 +1394,7 @@ class CaffeVisApp(BaseApp):
 
                 # if selection is not frozen we use the input layer as target for visualization
                 if (not self.state.backprop_selection_frozen) or no_spatial_info:
-                    grad_blob = self.net.blobs['data'].diff
+                    grad_blob = self.settings.adapter.get_layer_diff('input')
 
                     grad_blob = grad_blob[0]  # bc01 -> c01
                     grad_blob = grad_blob.transpose((1, 2, 0))  # c01 -> 01c

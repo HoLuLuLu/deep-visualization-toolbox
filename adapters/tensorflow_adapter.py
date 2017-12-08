@@ -17,10 +17,17 @@ class TensorflowAdapter(BaseAdapter):
 
     def load_network(self, settings):
 
-
+        # placeholders
+        self._net = None
+        self._data_mean = None
 
         pass
 
+    def get_layers_list(self):
+        return []
+
+    def get_blob_info(self, layer_name):
+        pass
 
     pass
 

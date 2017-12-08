@@ -1,9 +1,8 @@
-import os
 import time
 from threading import Lock
 from siamese_helper import SiameseViewMode, SiameseHelper
-from caffe_misc import layer_name_to_top_name
-from image_misc import get_tiles_height_width_ratio, gray_to_colormap
+from image_misc import gray_to_colormap
+
 
 class PatternMode:
     OFF = 0
@@ -14,6 +13,7 @@ class PatternMode:
     WEIGHTS_CORRELATION = 5
     ACTIVATIONS_CORRELATION = 6
     NUMBER_OF_MODES = 7
+
 
 class BackpropMode:
     OFF = 0
@@ -34,6 +34,7 @@ class BackpropMode:
             return 'deconv gb'
 
         return 'n/a'
+
 
 class BackpropViewOption:
     RAW = 0
@@ -61,6 +62,7 @@ class BackpropViewOption:
 
         return 'n/a'
 
+
 class ColorMapOption:
     GRAY = 0
     JET = 1
@@ -77,6 +79,7 @@ class ColorMapOption:
             return 'plasma'
 
         return 'n/a'
+
 
 class InputOverlayOption:
     OFF = 0
@@ -95,21 +98,19 @@ class InputOverlayOption:
 
         return 'n/a'
 
+
 class CaffeVisAppState(object):
     '''State of CaffeVis app.'''
 
-    def __init__(self, net, settings, bindings, live_vis):
+    def __init__(self, settings, bindings, live_vis):
         self.lock = Lock()  # State is accessed in multiple threads
         self.settings = settings
         self.bindings = bindings
-        self.net = net
         self.live_vis = live_vis
 
-        self.fill_layers_list(net)
+        self.fill_layers_list()
 
         self.siamese_helper = SiameseHelper(settings.layers_list)
-
-        self._populate_net_blob_info(net)
 
         self.layer_boost_indiv_choices = self.settings.caffevis_boost_indiv_choices   # 0-1, 0 is noop
         self.layer_boost_gamma_choices = self.settings.caffevis_boost_gamma_choices   # 0-inf, 1 is noop
@@ -125,28 +126,6 @@ class CaffeVisAppState(object):
         self.quit = False
 
         self._reset_user_state()
-
-    def _populate_net_blob_info(self, net):
-        '''For each blob, save the number of filters and precompute
-        tile arrangement (needed by CaffeVisAppState to handle keyboard navigation).
-        '''
-        self.net_blob_info = {}
-        for key in net.blobs.keys():
-            self.net_blob_info[key] = {}
-            # Conv example: (1, 96, 55, 55)
-            # FC example: (1, 1000)
-            blob_shape = net.blobs[key].data.shape
-
-            # handle case when output is a single number per image in the batch
-            if (len(blob_shape) == 1):
-                blob_shape = (blob_shape[0], 1)
-
-            self.net_blob_info[key]['isconv'] = (len(blob_shape) == 4)
-            self.net_blob_info[key]['data_shape'] = blob_shape[1:]  # Chop off batch size
-            self.net_blob_info[key]['n_tiles'] = blob_shape[1]
-            self.net_blob_info[key]['tiles_rc'] = get_tiles_height_width_ratio(blob_shape[1], self.settings.caffevis_layers_aspect_ratio)
-            self.net_blob_info[key]['tile_rows'] = self.net_blob_info[key]['tiles_rc'][0]
-            self.net_blob_info[key]['tile_cols'] = self.net_blob_info[key]['tiles_rc'][1]
 
     def get_headers(self):
 
@@ -323,9 +302,7 @@ class CaffeVisAppState(object):
                     # print 'channels list clicked on (%s,%s)' % (x, y)
 
                     default_layer_name = self.get_default_layer_name()
-                    default_top_name = layer_name_to_top_name(self.net, default_layer_name)
-
-                    tile_rows, tile_cols = self.net_blob_info[default_top_name]['tiles_rc']
+                    tile_rows, tile_cols = self.settings.adapter.get_blob_info(default_layer_name)['tiles_rc']
 
                     dy_per_channel = (pane.data.shape[0] + 1) / float(tile_rows)
                     dx_per_channel = (pane.data.shape[1] + 1) / float(tile_cols)
@@ -478,43 +455,43 @@ class CaffeVisAppState(object):
     def get_current_backprop_layer_definition(self):
         return self.settings.layers_list[self.backprop_layer_idx]
 
-    def get_single_selected_data_blob(self, net, layer_def = None):
+    def get_single_selected_data_blob(self, layer_def = None):
 
         # if no layer specified, get current layer
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_single_selected_data_blob(net, layer_def, self.siamese_view_mode)
+        return self.siamese_helper.get_single_selected_data_blob(self.settings.adapter, layer_def, self.siamese_view_mode)
 
-    def get_single_selected_diff_blob(self, net, layer_def = None):
-
-        # if no layer specified, get current layer
-        if layer_def is None:
-            layer_def = self.get_current_layer_definition()
-
-        return self.siamese_helper.get_single_selected_diff_blob(net, layer_def, self.siamese_view_mode)
-
-    def get_siamese_selected_data_blobs(self, net, layer_def = None):
+    def get_single_selected_diff_blob(self, layer_def = None):
 
         # if no layer specified, get current layer
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_siamese_selected_data_blobs(net, layer_def, self.siamese_view_mode)
+        return self.siamese_helper.get_single_selected_diff_blob(self.settings.adapter, layer_def, self.siamese_view_mode)
 
-    def get_siamese_selected_diff_blobs(self, net, layer_def = None):
+    def get_siamese_selected_data_blobs(self, layer_def = None):
 
         # if no layer specified, get current layer
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_siamese_selected_diff_blobs(net, layer_def, self.siamese_view_mode)
+        return self.siamese_helper.get_siamese_selected_data_blobs(self.settings.adapter, layer_def, self.siamese_view_mode)
+
+    def get_siamese_selected_diff_blobs(self, layer_def = None):
+
+        # if no layer specified, get current layer
+        if layer_def is None:
+            layer_def = self.get_current_layer_definition()
+
+        return self.siamese_helper.get_siamese_selected_diff_blobs(self.settings.adapter, layer_def, self.siamese_view_mode)
 
 
-    def backward_from_layer(self, net, backprop_layer_def, backprop_unit):
+    def backward_from_layer(self, backprop_layer_def, backprop_unit):
 
         try:
-            return SiameseHelper.backward_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode)
+            return SiameseHelper.backward_from_layer(self.settings.adapter, backprop_layer_def, backprop_unit, self.siamese_view_mode)
         except AttributeError:
             print 'ERROR: required bindings (backward_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
@@ -523,10 +500,10 @@ class CaffeVisAppState(object):
             with self.lock:
                 self.back_enabled = False
 
-    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type):
+    def deconv_from_layer(self, backprop_layer_def, backprop_unit, deconv_type):
 
         try:
-            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode, deconv_type)
+            return SiameseHelper.deconv_from_layer(self.settings.adapter, backprop_layer_def, backprop_unit, self.siamese_view_mode, deconv_type)
         except AttributeError:
             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
@@ -558,7 +535,6 @@ class CaffeVisAppState(object):
     def move_selection(self, direction, dist = 1):
 
         default_layer_name = self.get_default_layer_name()
-        default_top_name = layer_name_to_top_name(self.net, default_layer_name)
 
         if direction == 'left':
             if self.cursor_area == 'top':
@@ -574,14 +550,14 @@ class CaffeVisAppState(object):
             if self.cursor_area == 'top':
                 self.cursor_area = 'bottom'
             else:
-                self.selected_unit += self.net_blob_info[default_top_name]['tile_cols'] * dist
+                self.selected_unit += self.settings.adapter.get_blob_info(default_layer_name)['tile_cols'] * dist
         elif direction == 'up':
             if self.cursor_area == 'top':
                 pass
             else:
-                self.selected_unit -= self.net_blob_info[default_top_name]['tile_cols'] * dist
+                self.selected_unit -= self.settings.adapter.get_blob_info(default_layer_name)['tile_cols'] * dist
                 if self.selected_unit < 0:
-                    self.selected_unit += self.net_blob_info[default_top_name]['tile_cols']
+                    self.selected_unit += self.settings.adapter.get_blob_info(default_layer_name)['tile_cols']
                     self.cursor_area = 'top'
 
         self.validate_state_for_summary_only_patterns()
@@ -589,9 +565,8 @@ class CaffeVisAppState(object):
     def _ensure_valid_selected(self):
 
         default_layer_name = self.get_default_layer_name()
-        default_top_name = layer_name_to_top_name(self.net, default_layer_name)
 
-        n_tiles = self.net_blob_info[default_top_name]['n_tiles']
+        n_tiles = self.settings.adapter.get_blob_info(default_layer_name)['n_tiles']
 
         # Forward selection
         self.selected_unit = max(0, self.selected_unit)
@@ -606,19 +581,15 @@ class CaffeVisAppState(object):
                 self.backprop_siamese_view_mode = self.siamese_view_mode
                 self.back_stale = True    # If there is any change, back diffs are now stale
 
-    def fill_layers_list(self, net):
+    def fill_layers_list(self):
 
         # if layers list is empty, fill it with layer names
         if not self.settings.layers_list:
 
             # go over layers
             self.settings.layers_list = []
-            for layer_name in list(net._layer_names):
 
-                # skip inplace layers
-                if len(net.top_names[layer_name]) == 1 and len(net.bottom_names[layer_name]) == 1 and net.top_names[layer_name][0] == net.bottom_names[layer_name][0]:
-                    continue
-
+            for layer_name in self.settings.adapter.get_layers_list():
                 self.settings.layers_list.append( {'format': 'normal', 'name/s': layer_name} )
 
         # filter layers if needed
@@ -627,7 +598,6 @@ class CaffeVisAppState(object):
                 if self.settings.caffevis_filter_layers(layer_def['name/s']):
                     print '  Layer filtered out by caffevis_filter_layers: %s' % str(layer_def['name/s'])
             self.settings.layers_list = filter(lambda layer_def: not self.settings.caffevis_filter_layers(layer_def['name/s']), self.settings.layers_list)
-
 
         pass
 
@@ -651,7 +621,7 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return SiameseHelper.get_layer_output_size(self.net, self.settings.is_siamese, layer_def, self.siamese_view_mode)
+        return SiameseHelper.get_layer_output_size(self.settings.adapter, self.settings.is_siamese, layer_def, self.siamese_view_mode)
 
     def get_layer_output_size_string(self, layer_def=None):
 
