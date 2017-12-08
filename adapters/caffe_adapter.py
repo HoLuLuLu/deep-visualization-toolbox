@@ -319,6 +319,9 @@ class CaffeAdapter(BaseAdapter):
             else:
                 self._calculated_channel_swap = (2, 1, 0)
 
+    def get_channel_swap(self):
+        return self._calculated_channel_swap
+
     class LayerRecord:
 
         def __init__(self, layer_def):

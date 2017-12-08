@@ -48,3 +48,13 @@ class BaseAdapter(object):
 
     def set_network_batch_size(self, batch_size):
         pass
+
+    def get_channel_swap(self):
+        """
+        get list of channels for converting network inputs to RGB
+        if the network was trained on BGR inputs, the return value should probably be [2, 1, 0]
+        if the network was trained on siamese BGR inputs, the return value should probably be [2, 1, 0, 5, 4, 3]
+        :return: list of channels for converting network inputs to RGB
+        """
+
+        pass

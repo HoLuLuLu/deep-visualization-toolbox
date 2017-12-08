@@ -47,7 +47,7 @@ class CaffeVisApp(BaseApp):
 
         settings.adapter.load_network(settings)
 
-        self._channel_swap = settings.adapter._calculated_channel_swap
+        self._channel_swap = settings.adapter.get_channel_swap()
 
         if self._channel_swap is None:
             self._channel_swap_inv = None
