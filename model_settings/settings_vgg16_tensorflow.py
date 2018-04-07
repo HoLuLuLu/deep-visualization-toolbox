@@ -8,9 +8,10 @@ use_gpu = False
 
 base_folder = '%DVT_ROOT%/../../models/vgg16_tensorflow/'
 adapter = TensorflowAdapter(
-    network_definition_script='./vgg.py',
-    checkpoint_filename='vgg_16.ckpt',
-    use_gpu=use_gpu)
+    network_definition_filename=base_folder + './vgg.py',
+    checkpoint_filename=base_folder + './vgg_16.ckpt',
+    use_gpu=use_gpu,
+    channels=3, height=224, width=224)
 
 # input images
 static_files_dir = '%DVT_ROOT%/' + './input_images/'

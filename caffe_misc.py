@@ -132,7 +132,7 @@ def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
 def get_max_data_extent(settings, layer_name, is_spatial):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
 
-    data_size = settings.adapter.get_layer_data('input').shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
+    height, width = settings.adapter.get_input_shape()[2:4] # e.g. (227,227) for fc6,fc7,fc8,prop
 
     if is_spatial:
         conv_size = settings.adapter.get_layer_data(layer_name).shape[2:4]        # e.g. (13,13) for conv5
@@ -140,11 +140,11 @@ def get_max_data_extent(settings, layer_name, is_spatial):
         data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_slice_middle)
         data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
         # crop data slice size to data size
-        data_slice_size = min(data_slice_size[0], data_size[0]), min(data_slice_size[1], data_size[1])
+        data_slice_size = min(data_slice_size[0], height), min(data_slice_size[1], width)
         return data_slice_size
     else:
         # Whole data region
-        return data_size
+        return (height, width)
 
 
 def compute_data_layer_focus_area(is_spatial, ii, jj, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):

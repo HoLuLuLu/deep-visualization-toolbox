@@ -5,6 +5,7 @@ import errno
 import pickle
 import datetime
 import StringIO
+
 from pylab import *
 from scipy.ndimage.filters import gaussian_filter
 
@@ -201,15 +202,15 @@ class GradientOptimizer(object):
 
         np.random.seed(params.rand_seed)
 
-        input_shape = self.settings.adapter.get_layer_data('input').shape
+        input_shape = self.settings.adapter.get_input_shape()
 
         if params.start_at == 'mean_plus_rand':
             x0 = np.random.normal(0, 10, input_shape)
         elif params.start_at == 'randu':
             if self.batched_data_mean is not None:
-                x0 = uniform(0, 255, input_shape) - self.batched_data_mean
+                x0 = np.random.uniform(0, 255, input_shape) - self.batched_data_mean
             else:
-                x0 = uniform(0, 255, input_shape)
+                x0 = np.random.uniform(0, 255, input_shape)
         elif params.start_at == 'mean':
             x0 = zeros(input_shape)
         else:
@@ -514,7 +515,7 @@ class GradientOptimizer(object):
                 is_spatial = params.is_spatial
                 layer_name = params.push_layer
                 size_ii, size_jj = get_max_data_extent(self.settings, layer_name, is_spatial)
-                data_size_ii, data_size_jj = self.settings.adapter.get_layer_data('input').shape[2:4]
+                data_size_ii, data_size_jj = self.settings.adapter.get_input_shape()[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
                     compute_data_layer_focus_area(is_spatial, temp_ii, temp_jj, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)

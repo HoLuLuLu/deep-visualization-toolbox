@@ -484,7 +484,7 @@ def scan_images_for_maxes(settings, datadir, n_top, outdir, search_min):
 
     tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
-    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
+    net_input_dims = settings.adapter.get_input_shape()[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size
@@ -542,7 +542,7 @@ def scan_pairs_for_maxes(settings, datadir, n_top, outdir, search_min):
 
     tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
-    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
+    net_input_dims = settings.adapter.get_input_shape()[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size
@@ -700,9 +700,8 @@ def output_max_patches(settings, max_tracker, layer_name, idx_begin, idx_end, nu
         mt.is_spatial = mt.is_conv
 
     size_ii, size_jj = get_max_data_extent(settings, layer_name, mt.is_spatial)
-    data_size_ii, data_size_jj = settings.adapter.get_layer_data('input').shape[2:4]
-
-    net_input_dims = settings.adapter.get_layer_data('input').shape[2:4]
+    data_size_ii, data_size_jj = settings.adapter.get_input_shape()[2:4]
+    net_input_dims = settings.adapter.get_input_shape()[2:4]
 
     # prepare variables used for batches
     batch = [None] * settings.max_tracker_batch_size

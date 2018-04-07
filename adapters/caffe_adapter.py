@@ -146,6 +146,9 @@ class CaffeAdapter(BaseAdapter):
 
         return layers_list
 
+    def get_input_shape(self):
+        return self.get_layer_data('input').shape
+
     def _calc_blob_info(self):
         '''For each blob, save the number of filters and precompute
         tile arrangement (needed by CaffeVisAppState to handle keyboard navigation).

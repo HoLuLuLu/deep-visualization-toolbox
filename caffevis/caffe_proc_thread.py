@@ -14,7 +14,7 @@ class CaffeProcThread(CodependentThread):
     def __init__(self, settings, state, loop_sleep, pause_after_keys, heartbeat_required):
         CodependentThread.__init__(self, heartbeat_required)
         self.daemon = True
-        self.input_dims = settings.adapter.get_layer_data('input').shape[2:4]    # e.g. (227,227)
+        self.input_dims = settings.adapter.get_input_shape()[2:4]
         self.state = state
         self.last_process_finished_at = None
         self.last_process_elapsed = None

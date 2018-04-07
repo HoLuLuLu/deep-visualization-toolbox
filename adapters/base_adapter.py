@@ -14,6 +14,18 @@ class BaseAdapter(object):
         pass
 
     def get_layers_list(self):
+        """
+        Returns a list of layer names. A layer is anything you can later query things like: offline parameters (weights, bias) and online parameters
+        (activation, gradients)
+        :return: list of layer names
+        """
+        pass
+
+    def get_input_shape(self):
+        """
+        Returns the input shape: (batch_size, channels, height, width)
+        :return: (batch_size, channels, height, width)
+        """
         pass
 
     def get_blob_info(self, layer_name):
@@ -56,5 +68,4 @@ class BaseAdapter(object):
         if the network was trained on siamese BGR inputs, the return value should probably be [2, 1, 0, 5, 4, 3]
         :return: list of channels for converting network inputs to RGB
         """
-
         pass
