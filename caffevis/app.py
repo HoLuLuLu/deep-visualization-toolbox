@@ -4,8 +4,6 @@
 # add parent folder to search path, to enable import of core modules like settings
 import os,sys,inspect
 
-from dask.array.random import normal
-
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
