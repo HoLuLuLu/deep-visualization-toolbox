@@ -1,17 +1,5 @@
 # Deep Visualization Toolbox
 
-The original version of the tool was first described [here](http://yosinski.com/deepvis) and more formally in this paper:
-
- * Jason Yosinski, Jeff Clune, Anh Nguyen, Thomas Fuchs, and Hod Lipson. [Understanding neural networks through deep visualization](http://arxiv.org/abs/1506.06579). Presented at the Deep Learning Workshop, International Conference on Machine Learning (ICML), 2015.
-
-If you find this paper or code useful, we encourage you to cite the paper. BibTeX:
-
-    @inproceedings{yosinski-2015-ICML-DL-understanding-neural-networks,
-    Author = {Jason Yosinski and Jeff Clune and Anh Nguyen and Thomas Fuchs and Hod Lipson},
-    Booktitle = {Deep Learning Workshop, International Conference on Machine Learning (ICML)},
-    Title = {Understanding Neural Networks Through Deep Visualization},
-    Year = {2015}}
-    
 This repository contains an improved version of the tool, made by Arik Poznanski.
 The most notable improvements are:
   * Added new visualizations: 
@@ -24,6 +12,19 @@ The most notable improvements are:
     * Enhanced UI (Input overlays, color maps, mouse support)
     * Support input source (Directory, image list, siamese image list)
   * Tested on all major network architectures, including: LeNet, AlexNet, ZFNet, GoogLeNet, VGGNet and ResNet.  
+
+The original version of the tool was first described [here](http://yosinski.com/deepvis) and more formally in this paper:
+
+ * Jason Yosinski, Jeff Clune, Anh Nguyen, Thomas Fuchs, and Hod Lipson. [Understanding neural networks through deep visualization](http://arxiv.org/abs/1506.06579). Presented at the Deep Learning Workshop, International Conference on Machine Learning (ICML), 2015.
+
+If you find this paper or code useful, we encourage you to cite the paper. BibTeX:
+
+    @inproceedings{yosinski-2015-ICML-DL-understanding-neural-networks,
+    Author = {Jason Yosinski and Jeff Clune and Anh Nguyen and Thomas Fuchs and Hod Lipson},
+    Booktitle = {Deep Learning Workshop, International Conference on Machine Learning (ICML)},
+    Title = {Understanding Neural Networks Through Deep Visualization},
+    Year = {2015}}
+    
     
 ## Installation 
 
@@ -105,7 +106,7 @@ model_to_load = 'your_model'
 
 ## Maximal Input
 
-* For each channel we find the image patch from our dataset the has the highest activation.
+* For each channel we find the image patch from our dataset that has the highest activation.
 
 ![Maximal input](doc/maximal-input.png)
 
