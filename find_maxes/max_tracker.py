@@ -104,7 +104,7 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
                 break
 
-        fig.suptitle('max activations histgoram of layer %s channel %d' % (layer_name,channel_idx))
+        fig.suptitle('max activations histogram of layer %s channel %d' % (layer_name,channel_idx))
         ax.xaxis.label.set_text('max activation value')
         ax.yaxis.label.set_text('inputs count')
 
