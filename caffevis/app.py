@@ -877,6 +877,12 @@ class CaffeVisApp(BaseApp):
 
                 figure_buffer = fig2data(fig)
 
+                # save weight histogram as image file
+                path = os.path.join(folder_path, 'weights_histogramm')
+                mkdir_p(os.path.join(path, 'unit_%04d' % channel_idx))
+                fig.savefig(os.path.join(path, 'unit_%04d' % channel_idx,
+                                         'weight_histogram.png'))
+
                 display_3D_highres[channel_idx, :, ::] = figure_buffer
 
                 ax.cla()
