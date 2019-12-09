@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--datadir', type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--outfile', type=str, default = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled'), help='output filename for pkl')
     parser.add_argument('--outdir', type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{max_histogram}.png')
-    parser.add_argument('--do-histograms', action = 'store_true', default = settings.max_tracker_do_histograms, help = 'Output histogram image file containing histogrma of max values per channel')
+    parser.add_argument('--do-histograms', action = 'store_true', default = settings.max_tracker_do_histograms, help = 'Output histogram image file containing histogram of max values per channel')
     parser.add_argument('--do-correlation', action = 'store_true', default = settings.max_tracker_do_correlation, help = 'Output correlation image file containing correlation of channels per layer')
     parser.add_argument('--search-min', action='store_true', default=False, help='Should we also search for minimal activations?')
 
