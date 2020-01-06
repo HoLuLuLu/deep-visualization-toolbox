@@ -861,6 +861,7 @@ class CaffeVisApp(BaseApp):
                 # get vector of weights
                 weights = net.params[layer_name][0].data[channel_idx].flatten()
                 bias = net.params[layer_name][1].data[channel_idx]
+                weights_num = len(weights)
 
                 # create histogram
                 hist, bin_edges = np.histogram(weights, bins=50)
@@ -871,7 +872,7 @@ class CaffeVisApp(BaseApp):
 
                 ax.bar(center, hist, align='center', width=width, color='g')
 
-                fig.suptitle('weights for unit %d, bias is %f' % (channel_idx, bias))
+                fig.suptitle('weights for unit %d, bias is %f\n %s weights used' % (channel_idx, bias, weights_num))
                 ax.xaxis.label.set_text('weight value')
                 ax.yaxis.label.set_text('count')
 
@@ -953,12 +954,13 @@ class CaffeVisApp(BaseApp):
                         # generate weights histogram for layer
                         weights = net.params[layer_name][0].data.flatten()
                         hist, bin_edges = np.histogram(weights, bins=50)
+                        weights_num = len(weights)
 
                         width = 0.7 * (bin_edges[1] - bin_edges[0])
                         center = (bin_edges[:-1] + bin_edges[1:]) / 2
                         ax.bar(center, hist, align='center', width=width, color='g')
 
-                        fig.suptitle('weights for layer %s' % layer_name)
+                        fig.suptitle('weights for layer %s\n %s weights used' % (layer_name, weights_num))
                         ax.xaxis.label.set_text('weight value')
                         ax.yaxis.label.set_text('count')
 
@@ -970,12 +972,13 @@ class CaffeVisApp(BaseApp):
                         # generate bias histogram for layer
                         bias = net.params[layer_name][1].data.flatten()
                         hist, bin_edges = np.histogram(bias, bins=50)
+                        bias_num = len(bias)
 
                         width = 0.7 * (bin_edges[1] - bin_edges[0])
                         center = (bin_edges[:-1] + bin_edges[1:]) / 2
                         ax.bar(center, hist, align='center', width=width, color='g')
 
-                        fig.suptitle('bias for layer %s' % layer_name)
+                        fig.suptitle('bias for layer %s\n %s biases used' % (layer_name, bias_num))
                         ax.xaxis.label.set_text('bias value')
                         ax.yaxis.label.set_text('count')
 
