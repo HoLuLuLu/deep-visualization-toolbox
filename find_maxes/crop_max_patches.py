@@ -22,7 +22,6 @@ from jby_misc import WithTimer
 from max_tracker import output_max_patches
 from find_max_acts import load_max_tracker_from_file
 from settings_misc import load_network
-from thread import start_new_thread, allocate_lock
 
 
 def main():
@@ -70,21 +69,11 @@ def main():
 
     nmt = load_max_tracker_from_file(args.nmt_pkl)
 
-    num_threads = 0
-    thread_started = False
-    lock = allocate_lock()
+    for layer_name in settings.layers_to_output_in_offline_scripts:
 
-    def extractBatches(thread_layer_name):
+        print 'Started work on layer %s' % (layer_name)
 
-        global num_threads, thread_started
-        lock.acquire()
-        num_threads += 1
-        thread_started = True
-        lock.release()
-
-        print 'Started work on layer %s' % (thread_layer_name)
-
-        normalized_layer_name = siamese_helper.normalize_layer_name_for_max_tracker(thread_layer_name)
+        normalized_layer_name = siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
         mt = nmt.max_trackers[normalized_layer_name]
 
@@ -103,18 +92,6 @@ def main():
                 output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
                                    args.N, args.datadir, args.filelist, args.outdir, True,
                                    (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
-
-        lock.acquire()
-        num_threads -= 1
-        lock.release()
-
-    for layer_name in settings.layers_to_output_in_offline_scripts:
-        start_new_thread(extractBatches, (layer_name,))
-
-    while not thread_started:
-        pass
-    while num_threads > 0:
-        pass
 
 if __name__ == '__main__':
     main()
