@@ -109,7 +109,7 @@ help_pane_loc = locals().get('help_pane_loc', (.07, .07, .86, .86))    # as a fr
 window_background = locals().get('window_background', (.2, .2, .2))
 stale_background = locals().get('stale_background',  (.3, .3, .2))
 static_files_dir = locals().get('static_files_dir', 'input_images')
-static_files_regexp = locals().get('static_files_regexp', '.*\.(jpg|jpeg|png)$')
+static_files_regexp = locals().get('static_files_regexp', '.*\.(jpg|jpeg|png|tif)$')
 static_files_ignore_case = locals().get('static_files_ignore_case', True)
 # True to stretch to square, False to crop to square. (Can change at
 # runtime via 'stretch_mode' key.)
