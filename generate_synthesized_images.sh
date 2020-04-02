@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-./optimize_image.py
+python2 ./optimize_image.py "$@"
 
