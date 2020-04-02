@@ -9,7 +9,7 @@ import sys
 import argparse
 import numpy as np
 
-import settings
+# import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import read_label_file, set_mean
 from settings_misc import load_network
@@ -86,7 +86,10 @@ def get_parser():
                         help = 'Output path and filename prefix (default: outputs/%(p.push_layer)s/unit_%(p.push_channel)04d/opt_%(r.batch_index)03d)')
     parser.add_argument('--brave', action = 'store_true', default=True, help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
     parser.add_argument('--skipbig', action = 'store_true', default=True, help = 'Skip outputting large *info_big.pkl files (contains pickled version of x0, last x, best x, first x that attained max on the specified layer.')
-    parser.add_argument('--skipsmall', action = 'store_true', default=True, help = 'Skip outputting small *info.pkl files (contains pickled version of..')
+    parser.add_argument('--skipsmall', action='store_true', default=True,
+                        help='Skip outputting small *info.pkl files (contains pickled version of..')
+    parser.add_argument('--model', type=str, default=None,
+                        help='Name of the model you want to change to. This overwrites the settings made in files.')
 
     return parser
 
@@ -124,7 +127,7 @@ def parse_and_validate_push_spatial(parser, push_spatial):
         parser.error(err)
 
     if push_spatial == None:
-        push_spatial = (0,0)    # Convert to tuple format
+        push_spatial = (0, 0)  # Convert to tuple format
     elif isinstance(push_spatial, tuple) and len(push_spatial) == 2:
         pass
     else:
@@ -134,98 +137,135 @@ def parse_and_validate_push_spatial(parser, push_spatial):
     return push_spatial
 
 
+def change_model_to_load(newmodel):
+    settings_user_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings_user.py')
+    if os.path.isfile(settings_user_path):
+        os.rename(settings_user_path, settings_user_path + '.backup')
+
+    settings_user_file = open(settings_user_path, 'w')
+
+    if os.path.isfile(settings_user_path + '.backup'):
+        backupfile = open(settings_user_path + '.backup', 'r')
+        for line in backupfile:
+            if not line.strip().startswith('model_to_load') and not line.strip().startswith('#'):
+                settings_user_file.write(line)
+
+    settings_user_file.write('model_to_load = \'' + newmodel + '\'')
+
+
+def clean_temp_file():
+    settings_user_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings_user.py')
+
+    if os.path.isfile(settings_user_path + '.backup'):
+        if os.path.isfile(settings_user_path):
+            os.remove(settings_user_path)
+        os.rename(settings_user_path + '.backup', settings_user_path)
+
+
 def main():
-    parser = get_parser()
-    args = parser.parse_args()
-    
-    # Finish parsing args
+    try:
+        # if model in command line change to it
+        if '--model' in sys.argv:
+            change_model_to_load(sys.argv[sys.argv.index('--model') + 1])
 
-    lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
-    push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
+        import settings
 
-    settings.caffevis_deploy_prototxt = args.deploy_proto
-    settings.caffevis_network_weights = args.net_weights
+        parser = get_parser()
+        args = parser.parse_args()
 
-    net, data_mean = load_network(settings)
+        # Finish parsing args
 
-    # validate batch size
-    if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
-        # currently, no batch support for siamese_batch_pair networks
-        # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
-        assert (settings.max_tracker_batch_size == 1)
+        lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
+        push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
 
-    current_data_shape = net.blobs['data'].shape
-    net.blobs['data'].reshape(args.batch_size, current_data_shape[1], current_data_shape[2], current_data_shape[3])
-    net.reshape()
+        settings.caffevis_deploy_prototxt = args.deploy_proto
+        settings.caffevis_network_weights = args.net_weights
 
-    labels = None
-    if settings.caffevis_labels:
-        labels = read_label_file(settings.caffevis_labels)
+        net, data_mean = load_network(settings)
 
-    if data_mean is not None:
-        if len(data_mean.shape) == 3:
-            batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
-        elif len(data_mean.shape) == 1:
-            data_mean = data_mean[np.newaxis,:,np.newaxis,np.newaxis]
-            batched_data_mean = np.tile(data_mean, (args.batch_size,1,current_data_shape[2],current_data_shape[3]))
-    else:
-        batched_data_mean = data_mean
+        # validate batch size
+        if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+            # currently, no batch support for siamese_batch_pair networks
+            # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
+            assert (settings.max_tracker_batch_size == 1)
 
-    optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
-                                  label_layers = settings.caffevis_label_layers,
-                                  channel_swap_to_rgb = settings.caffe_net_channel_swap)
+        current_data_shape = net.blobs['data'].shape
+        net.blobs['data'].reshape(args.batch_size, current_data_shape[1], current_data_shape[2], current_data_shape[3])
+        net.reshape()
 
-    if not args.push_layers:
-        print "ERROR: No layers to work on, please set layers_to_output_in_offline_scripts to list of layers"
-        return
+        labels = None
+        if settings.caffevis_labels:
+            labels = read_label_file(settings.caffevis_labels)
 
-    # go over push layers
-    for count, push_layer in enumerate(args.push_layers):
-
-        top_name = layer_name_to_top_name(net, push_layer)
-        blob = net.blobs[top_name].data
-        is_spatial = (len(blob.shape) == 4)
-        channels = blob.shape[1]
-
-        # get layer definition
-        layer_def = settings._layer_name_to_record[push_layer]
-
-        if is_spatial:
-            push_spatial = (layer_def.filter[0] / 2, layer_def.filter[1] / 2)
+        if data_mean is not None:
+            if len(data_mean.shape) == 3:
+                batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
+            elif len(data_mean.shape) == 1:
+                data_mean = data_mean[np.newaxis, :, np.newaxis, np.newaxis]
+                batched_data_mean = np.tile(data_mean,
+                                            (args.batch_size, 1, current_data_shape[2], current_data_shape[3]))
         else:
-            push_spatial = (0, 0)
+            batched_data_mean = data_mean
 
-        # if channels defined in settings file, use them
-        if settings.optimize_image_channels:
-            channels_list = settings.optimize_image_channels
-        else:
-            channels_list = range(channels)
+        optimizer = GradientOptimizer(settings, net, batched_data_mean, labels=labels,
+                                      label_layers=settings.caffevis_label_layers,
+                                      channel_swap_to_rgb=settings.caffe_net_channel_swap)
 
-        # go over channels
-        for current_channel in channels_list:
-            params = FindParams(
-                start_at = args.start_at,
-                rand_seed = args.rand_seed,
-                batch_size = args.batch_size,
-                push_layer = push_layer,
-                push_channel = current_channel,
-                push_spatial = push_spatial,
-                push_dir = args.push_dir,
-                decay = args.decay,
-                blur_radius = args.blur_radius,
-                blur_every = args.blur_every,
-                small_val_percentile = args.small_val_percentile,
-                small_norm_percentile = args.small_norm_percentile,
-                px_benefit_percentile = args.px_benefit_percentile,
-                px_abs_benefit_percentile = args.px_abs_benefit_percentile,
-                lr_policy = args.lr_policy,
-                lr_params = lr_params,
-                max_iter = args.max_iters[count % len(args.max_iters)],
-                is_spatial = is_spatial,
-            )
+        if not args.push_layers:
+            print "ERROR: No layers to work on, please set layers_to_output_in_offline_scripts to list of layers"
+            return
 
-            optimizer.run_optimize(params, prefix_template = args.output_prefix,
-                                   brave = args.brave, skipbig = args.skipbig, skipsmall = args.skipsmall)
+        # go over push layers
+        for count, push_layer in enumerate(args.push_layers):
+
+            top_name = layer_name_to_top_name(net, push_layer)
+            blob = net.blobs[top_name].data
+            is_spatial = (len(blob.shape) == 4)
+            channels = blob.shape[1]
+
+            # get layer definition
+            layer_def = settings._layer_name_to_record[push_layer]
+
+            if is_spatial:
+                push_spatial = (layer_def.filter[0] / 2, layer_def.filter[1] / 2)
+            else:
+                push_spatial = (0, 0)
+
+            # if channels defined in settings file, use them
+            if settings.optimize_image_channels:
+                channels_list = settings.optimize_image_channels
+            else:
+                channels_list = range(channels)
+
+            # go over channels
+            for current_channel in channels_list:
+                params = FindParams(
+                    start_at=args.start_at,
+                    rand_seed=args.rand_seed,
+                    batch_size=args.batch_size,
+                    push_layer=push_layer,
+                    push_channel=current_channel,
+                    push_spatial=push_spatial,
+                    push_dir=args.push_dir,
+                    decay=args.decay,
+                    blur_radius=args.blur_radius,
+                    blur_every=args.blur_every,
+                    small_val_percentile=args.small_val_percentile,
+                    small_norm_percentile=args.small_norm_percentile,
+                    px_benefit_percentile=args.px_benefit_percentile,
+                    px_abs_benefit_percentile=args.px_abs_benefit_percentile,
+                    lr_policy=args.lr_policy,
+                    lr_params=lr_params,
+                    max_iter=args.max_iters[count % len(args.max_iters)],
+                    is_spatial=is_spatial,
+                )
+
+                optimizer.run_optimize(params, prefix_template=args.output_prefix,
+                                       brave=args.brave, skipbig=args.skipbig, skipsmall=args.skipsmall)
+    except Exception as exep:
+        print str(exep)
+    finally:
+        clean_temp_file()
 
 
 if __name__ == '__main__':
