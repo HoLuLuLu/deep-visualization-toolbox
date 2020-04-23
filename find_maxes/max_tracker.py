@@ -352,22 +352,25 @@ class NetMaxTracker(object):
         self.max_trackers = {}
 
         for layer_name in self.layers:
+            try:
+                print 'init layer: ', layer_name
+                top_name = layer_name_to_top_name(net, layer_name)
+                blob = net.blobs[top_name].data
 
-            print 'init layer: ', layer_name
-            top_name = layer_name_to_top_name(net, layer_name)
-            blob = net.blobs[top_name].data
+                # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
+                # count as the same layer in terms of activations
+                normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
-            # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
-            # count as the same layer in terms of activations
-            normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
+                is_spatial = (len(blob.shape) == 4)
 
-            is_spatial = (len(blob.shape) == 4)
-
-            # only add normalized layer once
-            if normalized_layer_name not in self.max_trackers:
-                self.max_trackers[normalized_layer_name] = MaxTracker(is_spatial, blob.shape[1], n_top = self.n_top,
-                                                                      initial_val = self.initial_val,
-                                                                      dtype = blob.dtype, search_min = self.search_min)
+                # only add normalized layer once
+                if normalized_layer_name not in self.max_trackers:
+                    self.max_trackers[normalized_layer_name] = MaxTracker(is_spatial, blob.shape[1], n_top=self.n_top,
+                                                                          initial_val=self.initial_val,
+                                                                          dtype=blob.dtype, search_min=self.search_min)
+            except KeyError as err:
+                print 'Error: Layer %s could not be initialized for this network' % layer_name
+                raise err
 
         self.init_done = True
 

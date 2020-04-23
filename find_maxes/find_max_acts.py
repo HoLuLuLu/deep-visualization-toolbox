@@ -129,8 +129,9 @@ def main():
 
         if args.do_histograms:
             net_max_tracker.calculate_histograms(args.outdir)
-    except Exception as exep:
-        print str(exep)
+    except:
+        e = sys.exc_info()[1]
+        print 'Error: %s' % str(e)
     finally:
         clean_temp_file()
 
