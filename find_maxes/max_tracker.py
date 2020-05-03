@@ -490,6 +490,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, search_min):
     sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
     import caffe
 
+    # Init NetMaxTracker
     tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
     net_input_dims = net.blobs['data'].data.shape[2:4]

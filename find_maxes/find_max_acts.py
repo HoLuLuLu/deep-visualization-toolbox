@@ -141,6 +141,14 @@ def save_max_tracker_to_file(filename, net_max_tracker):
     mkdir_p(dir_name)
 
     with WithTimer('Saving maxes'):
+        # Save unpickleable list of ndarrays with all maximal values
+        all_max_vals_dict = dict()
+        for layer_name in net_max_tracker.layers:
+            all_max_vals_dict[layer_name] = net_max_tracker.max_trackers[layer_name].all_max_vals
+        np.save('all_max_vals.npy', all_max_vals_dict)
+        del all_max_vals_dict
+
+        # Pickle pickleable Net_Max_Tracker parameters
         with open(filename, 'wb') as ff:
             pickle.dump(net_max_tracker, ff, -1)
         # save text version of pickle file for easier debugging
