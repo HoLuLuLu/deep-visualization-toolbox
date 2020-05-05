@@ -121,8 +121,6 @@ def main():
                                        args.N, args.datadir, args.filelist, args.outdir, True,
                                        (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop,
                                         args.do_backprop_norm, args.do_info))
-    except Exception as exep:
-        print str(exep)
     finally:
         clean_temp_file()
 

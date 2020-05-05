@@ -262,8 +262,6 @@ def main():
 
                 optimizer.run_optimize(params, prefix_template=args.output_prefix,
                                        brave=args.brave, skipbig=args.skipbig, skipsmall=args.skipsmall)
-    except Exception as exep:
-        print str(exep)
     finally:
         clean_temp_file()
 
