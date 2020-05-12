@@ -17,6 +17,7 @@ from optimize_image import change_model_to_load, clean_temp_file
 from settings_misc import load_network
 
 all_weights_per_layer = {}
+all_biases_per_layer = {}
 
 
 def calculate_weights_histogram_for_specific_layer(net, layer_name, output_dir, fig, ax, force=False):
@@ -125,7 +126,8 @@ def calculate_weight_bias_histograms_for_net(net, settings, output_dir=None, sca
         layer_output_dir = os.path.join(output_dir, layer_name)
         mkdir_p(layer_output_dir)
         try:
-            all_weights_per_layer[layer_name] = np.stack(net.params[layer_name][0].data, net.params[layer_name][1].data)
+            all_weights_per_layer[layer_name] = net.params[layer_name][0].data
+            all_biases_per_layer[layer_name] = net.params[layer_name][1].data
             layer_hist, layer_bin_edges = calculate_weights_histogram_for_specific_layer(net, layer_name,
                                                                                          layer_output_dir, fig, ax,
                                                                                          force)
@@ -150,7 +152,8 @@ def calculate_weight_bias_histograms_for_net(net, settings, output_dir=None, sca
             print 'Unable to generate weights/bias histograms for this layer: ' + str(excep)
 
     if len(all_weights_per_layer.keys()) > 0:
-        np.save(os.path.join(output_dir, 'all_weights_biases.npy'), all_weights_per_layer)
+        np.save(os.path.join(output_dir, 'all_weights.npy'), all_weights_per_layer)
+        np.save(os.path.join(output_dir, 'all_biases.npy'), all_biases_per_layer)
 
 
 def calculate_weights_histograms():
